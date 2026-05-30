@@ -10,6 +10,10 @@ Solução para o desafio de Arquiteto de Soluções — controle de lançamentos
 
 ![Cash Flow System 4.1 — Diagrama Arquitetura Alvo](cashflow_c2_diagram.svg)
 
+## Diagrama de Infraestrutura
+
+![Cash Flow System 4.1 — Diagrama de Infraestrutura](infra.drawio.png)
+
 ---
 
 ## Arquitetura
