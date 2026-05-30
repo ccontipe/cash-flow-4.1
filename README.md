@@ -6,6 +6,12 @@ Solução para o desafio de Arquiteto de Soluções — controle de lançamentos
 
 ---
 
+## Diagrama C2
+
+![Cash Flow System 4.1 — Diagrama C2](cashflow_c2_diagram.svg)
+
+---
+
 ## Arquitetura
 
 **Padrão:** CQRS + Event-Driven  
