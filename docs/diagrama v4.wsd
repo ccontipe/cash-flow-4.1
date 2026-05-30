@@ -1,0 +1,80 @@
+@startuml Sequence_RegistroLancamento
+title Sequência: Registro de Lançamento + Consolidação Assíncrona
+
+actor "Comerciante" as client
+participant "WAF + ALB" as waf
+participant "API Gateway\n(HTTP API)" as apigw
+participant "Cognito" as cognito
+participant "svc-lancamentos\n(ECS Fargate)" as svc_lanc
+database "RDS PostgreSQL\n(db-lancamentos)" as db_lanc
+queue "SQS Standard\n+ DLQ" as sqs
+participant "worker-consolidado\n(ECS Fargate Spot)" as worker
+database "RDS PostgreSQL\n(db-consolidado)" as db_consol
+database "ElastiCache\nRedis" as redis
+participant "CloudWatch\n/ X-Ray" as cw
+
+== Registro do Lançamento (Síncrono) ==
+
+client -> waf: POST /lancamentos\nHeader: Idempotency-Key: uuid-v4\nBody: {tipo, valor, data, descricao}
+waf -> apigw: Forward (WAF OK, rate limit OK)
+apigw -> cognito: Validar JWT Bearer token
+cognito --> apigw: Token válido
+apigw -> svc_lanc: POST /lancamentos
+
+svc_lanc -> db_lanc: SELECT id FROM idempotency_keys\nWHERE key = 'uuid-v4'
+alt Chave já existe (retry/duplicata)
+    db_lanc --> svc_lanc: Row encontrada
+    svc_lanc --> apigw: 200 OK (payload original — idempotente)
+    apigw --> client: 200 OK
+else Chave nova
+    db_lanc --> svc_lanc: Not found
+    svc_lanc -> db_lanc: BEGIN TRANSACTION\nINSERT lancamento\nINSERT idempotency_key\nCOMMIT
+    db_lanc --> svc_lanc: Lançamento persistido
+    svc_lanc -> sqs: SendMessage LancamentoRegistrado\n{lancamento_id, tipo, valor, data}
+    note right of svc_lanc: Circuit breaker: falha no SQS\nnão derruba o lançamento.\nReconciliação 23h59 cobre o gap.
+    svc_lanc -> cw: Trace X-Ray + lancamentos_registrados++
+    svc_lanc --> apigw: 201 Created {id, tipo, valor, data}
+    apigw --> client: 201 Created
+end
+
+== Consolidação Assíncrona (Desacoplada) ==
+
+note over worker, sqs: worker opera completamente independente do svc-lancamentos.\nFalha no worker não afeta o fluxo acima em nada.
+
+sqs -> worker: ReceiveMessage (long polling)
+worker -> db_consol: INSERT INTO saldo_diario (data)\nON CONFLICT (data) DO UPDATE\nSET total_creditos += valor (CREDITO)\nSET total_debitos += valor (DEBITO)
+db_consol --> worker: UPSERT OK
+worker -> redis: DEL saldo:{data} (invalida cache)
+worker -> cw: consolidacoes_processadas++
+worker -> sqs: DeleteMessage (ACK)
+
+== Consulta de Saldo Consolidado ==
+
+client -> apigw: GET /saldo/2025-01-15\nAuthorization: Bearer token
+apigw -> cognito: Validar JWT
+apigw -> svc_lanc: GET /saldo/2025-01-15
+
+svc_lanc -> redis: GET saldo:2025-01-15
+alt Cache HIT
+    redis --> svc_lanc: {saldo_final, total_creditos, total_debitos}
+    svc_lanc --> apigw: 200 OK (<1ms)
+else Cache MISS
+    redis --> svc_lanc: null
+    svc_lanc -> db_consol: SELECT * FROM saldo_diario WHERE data = '2025-01-15'
+    db_consol --> svc_lanc: Dados do saldo
+    svc_lanc -> redis: SET saldo:2025-01-15 {payload}\nEX {ttl: 24h se data passada / 60s se hoje}
+    svc_lanc --> apigw: 200 OK
+end
+apigw --> client: 200 OK {data, saldo_final, total_creditos, total_debitos}
+
+== Reconciliação Diária (23h59 — EventBridge) ==
+
+note over worker, db_consol: Job autônomo. Fecha o dia independente do que aconteceu na fila.
+
+worker -> db_lanc: SELECT tipo, SUM(valor) FROM lancamentos\nWHERE data = CURRENT_DATE\nGROUP BY tipo
+db_lanc --> worker: {CREDITO: X, DEBITO: Y}
+worker -> db_consol: UPSERT saldo_diario (data, total_creditos, total_debitos)
+worker -> redis: DEL saldo:{CURRENT_DATE}
+worker -> cw: reconciliacao_diaria_concluida
+
+@enduml

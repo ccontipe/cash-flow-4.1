@@ -1,0 +1,23 @@
+@startuml C1_Context_FluxoCaixa
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C1 — Contexto do Sistema: Fluxo de Caixa
+
+Person(comerciante, "Comerciante", "Registra lançamentos e consulta saldo diário via browser ou app mobile")
+Person(admin, "Administrador", "Monitora operação, configura alertas e acessa logs de auditoria")
+
+System(sistema_fluxo, "Sistema de Fluxo de Caixa", "Controle de lançamentos (débito/crédito) e consolidado de saldo diário")
+
+System_Ext(cognito, "Amazon Cognito", "Emissão e validação de tokens JWT")
+System_Ext(monitoring, "CloudWatch / X-Ray", "Observabilidade: métricas, logs, traces distribuídos")
+System_Ext(auditoria, "CloudTrail + S3", "Auditoria de chamadas de API e rastreabilidade")
+
+Rel(comerciante, sistema_fluxo, "POST /lancamentos, GET /saldo/{data}", "HTTPS / REST + JWT")
+Rel(admin, sistema_fluxo, "Monitora dashboards e alarmes")
+Rel(sistema_fluxo, cognito, "Valida token JWT", "HTTPS / OIDC")
+Rel(sistema_fluxo, monitoring, "Envia métricas, logs e traces", "SDK / OTEL")
+Rel(sistema_fluxo, auditoria, "Registra auditoria de API calls", "CloudTrail integrado")
+
+@enduml

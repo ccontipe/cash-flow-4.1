@@ -1,0 +1,151 @@
+version: '3.9'
+
+services:
+  # ─── Infrastructure ───────────────────────────────────────────────
+
+  postgres-lancamentos:
+    image: postgres:15-alpine
+    container_name: cf-db-lancamentos
+    environment:
+      POSTGRES_DB: lancamentos
+      POSTGRES_USER: lancamentos
+      POSTGRES_PASSWORD: lancamentos
+    ports:
+      - '5432:5432'
+    volumes:
+      - pg-lancamentos:/var/lib/postgresql/data
+      # Migration aplicada automaticamente na primeira inicialização do container.
+      # Em produção AWS: executar via pipeline CI antes do deploy (ex: psql ou flyway).
+      - ./services/lancamentos/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U lancamentos']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  postgres-consolidado:
+    image: postgres:15-alpine
+    container_name: cf-db-consolidado
+    environment:
+      POSTGRES_DB: consolidado
+      POSTGRES_USER: consolidado
+      POSTGRES_PASSWORD: consolidado
+    ports:
+      - '5433:5432'
+    volumes:
+      - pg-consolidado:/var/lib/postgresql/data
+      - ./services/consolidado/migrations/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U consolidado']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: cf-redis
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # LocalStack emula SQS localmente — sem depender de awslocal
+  localstack:
+    image: localstack/localstack:3
+    container_name: cf-localstack
+    environment:
+      SERVICES: sqs
+      DEFAULT_REGION: sa-east-1
+      AWS_DEFAULT_REGION: sa-east-1
+    ports:
+      - '4566:4566'
+    volumes:
+      - localstack:/var/lib/localstack
+      - ./scripts/localstack-init.sh:/etc/localstack/init/ready.d/init.sh
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:4566/_localstack/health | grep -q "\"sqs\": \"running\""']
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 10s
+
+  # ─── Services ─────────────────────────────────────────────────────
+
+  svc-lancamentos:
+    build:
+      context: ./services/lancamentos
+      dockerfile: Dockerfile
+    container_name: cf-svc-lancamentos
+    ports:
+      - '3001:3000'
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres-lancamentos
+      DB_PORT: 5432
+      DB_NAME: lancamentos
+      DB_USER: lancamentos
+      DB_PASS: lancamentos
+      SQS_ENDPOINT: http://localstack:4566
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/lancamentos-queue
+      AWS_REGION: sa-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      JWT_SECRET: local-dev-secret-change-in-prod
+    depends_on:
+      postgres-lancamentos:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  svc-consolidado:
+    build:
+      context: ./services/consolidado
+      dockerfile: Dockerfile
+    container_name: cf-svc-consolidado
+    ports:
+      - '3002:3000'
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres-consolidado
+      DB_PORT: 5432
+      DB_NAME: consolidado
+      DB_USER: consolidado
+      DB_PASS: consolidado
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SQS_ENDPOINT: http://localstack:4566
+      SQS_QUEUE_URL: http://localstack:4566/000000000000/lancamentos-queue
+      AWS_REGION: sa-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      JWT_SECRET: local-dev-secret-change-in-prod
+      LANCAMENTOS_SERVICE_URL: http://svc-lancamentos:3000
+    depends_on:
+      postgres-consolidado:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      svc-lancamentos:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -sf http://localhost:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 25s
+
+volumes:
+  pg-lancamentos:
+  pg-consolidado:
+  localstack:

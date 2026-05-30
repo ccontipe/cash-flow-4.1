@@ -1,0 +1,52 @@
+@startuml C2_Containers_FluxoCaixa
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C2 — Contêineres AWS: Sistema de Fluxo de Caixa
+
+Person(comerciante, "Comerciante", "Browser / App Mobile")
+
+System_Boundary(aws_account, "AWS Account — sa-east-1") {
+
+    Container(waf, "WAF", "AWS WAF", "Proteção OWASP Top 10, rate limiting por IP")
+    Container(alb, "ALB", "Application Load Balancer", "Roteamento L7, terminação TLS 1.3")
+    Container(api_gw, "API Gateway", "HTTP API", "JWT authorizer (Cognito), throttling 60 req/s, roteamento por path")
+    Container(cognito, "Amazon Cognito", "User Pool", "Emissão e validação de tokens JWT")
+    Container(eventbridge, "EventBridge Scheduler", "Cron 23h59", "Dispara reconciliação diária do consolidado")
+
+    System_Boundary(ecs_cluster, "ECS Cluster (Private Subnets — Multi-AZ)") {
+        Container(svc_lancamentos, "svc-lancamentos", "ECS Fargate / Node.js + TypeScript", "Registra lançamentos, valida idempotência, publica evento")
+        Container(svc_consolidado_api, "svc-consolidado-api", "ECS Fargate / Node.js + TypeScript", "Serve saldo diário com cache-aside Redis")
+        Container(worker_consolidado, "worker-consolidado", "ECS Fargate Spot / Node.js + TypeScript", "Consome SQS, agrega lançamentos, atualiza saldo diário")
+    }
+
+    Container(sqs_standard, "SQS Standard + DLQ", "LancamentosQueue", "Desacoplamento assíncrono. maxReceiveCount=3. KMS CMK.")
+    Container(db_lancamentos, "RDS PostgreSQL", "db-lancamentos — Multi-AZ", "Fonte de verdade dos lançamentos. Banco exclusivo do svc-lancamentos.")
+    Container(db_consolidado, "RDS PostgreSQL", "db-consolidado — Multi-AZ", "Saldos diários. Banco exclusivo do domínio consolidado.")
+    Container(redis, "ElastiCache Redis", "In-Memory Cache", "Cache saldo diário. TTL 24h dias passados / 60s dia corrente.")
+    Container(secrets_mgr, "Secrets Manager", "Secret Store", "Connection strings RDS e Redis. Rotação automática.")
+    Container(cloudwatch, "CloudWatch + X-Ray", "Observabilidade", "Métricas, logs JSON, traces distribuídos, alarme DLQ")
+}
+
+Rel(comerciante, waf, "HTTPS", "TLS 1.3")
+Rel(waf, alb, "HTTPS — tráfego validado")
+Rel(alb, api_gw, "HTTP interno")
+Rel(api_gw, cognito, "Valida JWT token")
+Rel(api_gw, svc_lancamentos, "POST /lancamentos", "HTTP")
+Rel(api_gw, svc_consolidado_api, "GET /saldo/{data}", "HTTP")
+Rel(svc_lancamentos, db_lancamentos, "INSERT lancamento + idempotency check", "JDBC/pg TLS")
+Rel(svc_lancamentos, sqs_standard, "SendMessage LancamentoRegistrado")
+Rel(svc_consolidado_api, redis, "GET saldo:{data} — cache-aside")
+Rel(svc_consolidado_api, db_consolidado, "SELECT saldo_diario — fallback cache miss")
+Rel(worker_consolidado, sqs_standard, "ReceiveMessage — long polling")
+Rel(worker_consolidado, db_consolidado, "UPSERT saldo_diario")
+Rel(worker_consolidado, redis, "DEL saldo:{data} — invalida cache")
+Rel(eventbridge, worker_consolidado, "Trigger reconciliação 23h59")
+Rel(svc_lancamentos, secrets_mgr, "Obtém credenciais RDS", "Task Role")
+Rel(svc_consolidado_api, secrets_mgr, "Obtém credenciais Redis", "Task Role")
+Rel(worker_consolidado, secrets_mgr, "Obtém credenciais", "Task Role")
+Rel(svc_lancamentos, cloudwatch, "Métricas e traces")
+Rel(worker_consolidado, cloudwatch, "Métricas e traces")
+
+@enduml

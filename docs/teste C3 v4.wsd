@@ -1,0 +1,35 @@
+@startuml C3_Components_SvcLancamentos
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title C3 — Componentes Internos: svc-lancamentos (Clean Architecture)
+
+Container_Boundary(svc_lancamentos, "svc-lancamentos (ECS Fargate)") {
+
+    Component(http_handler, "HTTP Handler", "NestJS Controller", "Recebe requisição HTTP, valida schema (class-validator), extrai Idempotency-Key do header")
+    Component(lancamento_usecase, "RegistrarLancamentoUseCase", "Application Layer", "Orquestra: verifica idempotência → persiste → publica evento. Transação atômica.")
+    Component(idempotency_repo, "IdempotencyRepository", "Infrastructure", "SELECT/INSERT em idempotency_keys. UNIQUE constraint garante exatamente uma inserção.")
+    Component(lancamento_repo, "LancamentoRepository", "Infrastructure", "INSERT imutável em lancamentos. TypeORM com parameterized queries.")
+    Component(event_publisher, "EventPublisher", "Infrastructure", "SendMessage para SQS Standard. MessageGroupId = data do lançamento.")
+    Component(circuit_breaker, "CircuitBreaker (SQS)", "Infrastructure", "Falha no SQS não propaga para o handler. Lançamento persiste; reconciliação batch cobre o gap.")
+    Component(health_check, "HealthCheck Handler", "GET /health", "Verifica conectividade RDS. 200 se saudável, 503 se não.")
+}
+
+Container_Ext(api_gw_ext, "API Gateway", "Roteia requisições")
+Container_Ext(db_lancamentos_ext, "RDS PostgreSQL — db-lancamentos", "Persistência")
+Container_Ext(sqs_ext, "SQS Standard", "Mensageria")
+Container_Ext(cloudwatch_ext, "CloudWatch / X-Ray", "Observabilidade")
+
+Rel(api_gw_ext, http_handler, "POST /lancamentos + Idempotency-Key header", "HTTP")
+Rel(http_handler, lancamento_usecase, "Chama use case com DTO validado")
+Rel(lancamento_usecase, idempotency_repo, "Verifica se idempotency_key já existe")
+Rel(lancamento_usecase, lancamento_repo, "Persiste lançamento (imutável)")
+Rel(lancamento_usecase, event_publisher, "Publica LancamentoRegistrado")
+Rel(event_publisher, circuit_breaker, "Wrappado com circuit breaker")
+Rel(circuit_breaker, sqs_ext, "SendMessage")
+Rel(idempotency_repo, db_lancamentos_ext, "SQL — tabela idempotency_keys")
+Rel(lancamento_repo, db_lancamentos_ext, "SQL — tabela lancamentos")
+Rel(http_handler, cloudwatch_ext, "Trace X-Ray + log estruturado JSON")
+
+@enduml
