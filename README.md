@@ -6,9 +6,9 @@ Solução para o desafio de Arquiteto de Soluções — controle de lançamentos
 
 ---
 
-## Diagrama C2
+## Diagrama de Solução
 
-![Cash Flow System 4.1 — Diagrama C2](cashflow_c2_diagram.svg)
+![Cash Flow System 4.1 — Diagrama Arquitetura Alvo](cashflow_c2_diagram.svg)
 
 ---
 

@@ -1,5 +1,5 @@
 <svg width="100%" viewBox="0 0 1110 820" role="img" style="" xmlns="http://www.w3.org/2000/svg">
-<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Cash Flow System 4.1 — Diagrama C2 (Arquitetura Alvo)</title>
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Cash Flow System 4.1 — Diagrama Arquitetura Alvo</title>
 <desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">Diagrama C2 mostrando os dois serviços (svc-lancamentos e svc-consolidado), infraestrutura de suporte (SQS, Redis, RDS), pessoas e artefatos de armazenamento.</desc>
 <defs>
 <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
@@ -12,7 +12,7 @@
 
 <!-- ── Background title bar ── -->
 <rect x="0" y="0" width="1100" height="48" rx="0" fill="#0F3460" opacity="0.97" style="fill:rgb(15, 52, 96);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:0.97;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
-<text x="550" y="30" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="600" fill="#E8F4FD" style="fill:rgb(232, 244, 253);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:sans-serif;font-size:17px;font-weight:600;text-anchor:middle;dominant-baseline:auto">Cash Flow System 4.1 — Diagrama C2 (Arquitetura Alvo)</text>
+<text x="550" y="30" text-anchor="middle" font-family="sans-serif" font-size="17" font-weight="600" fill="#E8F4FD" style="fill:rgb(232, 244, 253);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:sans-serif;font-size:17px;font-weight:600;text-anchor:middle;dominant-baseline:auto">Cash Flow System 4.1 — Diagrama Arquitetura Alvo</text>
 
 <!-- ══════════════════════════════════════════════
      COLUNA ESQUERDA — PESSOAS
